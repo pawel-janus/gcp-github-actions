@@ -33,6 +33,11 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Verify authentication
+        run: |
+          gcloud auth list
+          gcloud config get-value project
+
       - name: Build Docker image
         run: |
           gcloud builds submit \
