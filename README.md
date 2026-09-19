@@ -252,7 +252,31 @@ gcloud projects get-iam-policy $PROJECT_ID \
   --filter="bindings.members:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
-### Step 6: Bind GitHub Repo → Service Account
+### Step 6: Grant Cloud Build Bucket Permissions
+
+Cloud Build needs to upload source code to a Cloud Storage bucket. Grant the Service Account permissions **only to the Cloud Build bucket** (not all buckets in the project).
+
+```bash
+# Grant access only to Cloud Build bucket (least privilege principle)
+gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+```
+
+**Why bucket-specific?**
+- Service Account only needs access to the Cloud Build staging bucket
+- **NOT** to other buckets in the project (user data, logs, backups)
+- Follows the principle of least privilege
+
+**Verify:**
+```bash
+gcloud storage buckets get-iam-policy gs://${PROJECT_ID}_cloudbuild \
+  --account=$ACCOUNT \
+  --filter="bindings.members:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+```
+
+### Step 7: Bind GitHub Repo → Service Account
 
 ```bash
 gcloud iam service-accounts add-iam-policy-binding github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com \
@@ -273,7 +297,7 @@ gcloud iam service-accounts get-iam-policy github-actions-sa@${PROJECT_ID}.iam.g
   --project=$PROJECT_ID
 ```
 
-### Step 7: Get Workload Identity Provider Name
+### Step 8: Get Workload Identity Provider Name
 
 ```bash
 gcloud iam workload-identity-pools providers describe github-provider \
@@ -289,9 +313,9 @@ gcloud iam workload-identity-pools providers describe github-provider \
 projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
 ```
 
-Save this value - you'll need it for `.github/workflows/deploy.yml`.
+Save this value - you'll need it for GitHub Repository Variable `GCP_WORKLOAD_IDENTITY_PROVIDER`.
 
-### Step 8: Create Artifact Registry Repository
+### Step 9: Create Artifact Registry Repository
 
 ```bash
 # Check if exists
