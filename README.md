@@ -278,11 +278,17 @@ gcloud projects get-iam-policy $PROJECT_ID \
 Cloud Build needs to upload source code to a Cloud Storage bucket. Grant permissions **only to the Cloud Build bucket** for both the GitHub Actions SA and the default Cloud Build SA.
 
 ```bash
-# Grant bucket access to GitHub Actions SA
+# Grant bucket viewer access to GitHub Actions SA (read-only metadata)
 gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
   --account=$ACCOUNT \
   --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --role="roles/storage.legacyBucketWriter"
+  --role="roles/storage.bucketViewer"
+
+# Grant object admin to GitHub Actions SA (manage objects for logs)
+gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
 
 # Grant bucket access to default Cloud Build SA (executes the build)
 gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
@@ -296,9 +302,11 @@ gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
 - `{PROJECT_NUMBER}@cloudbuild.gserviceaccount.com` → **executes** the build (uploads source, builds image)
 - Both need bucket access, but only to this one bucket
 
-**Why `storage.admin` for Cloud Build SA?**
-- Cloud Build needs full control over source uploads and staging
-- Bucket-specific (not project-wide), so still follows least privilege
+**Why these specific roles?**
+- `storage.bucketViewer` (github-actions-sa) → read bucket metadata (lightweight, read-only)
+- `storage.objectAdmin` (github-actions-sa) → manage log objects in `--gcs-log-dir`
+- `storage.admin` (Cloud Build SA) → full control for source uploads and staging
+- All bucket-specific (not project-wide) → follows least privilege principle
 
 **Why bucket-specific?**
 - Service Accounts only need access to the Cloud Build staging bucket
