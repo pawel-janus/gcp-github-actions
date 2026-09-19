@@ -357,6 +357,9 @@ workspaces/backend/
 │   └── index.ts          # Hono app with 3 endpoints
 ├── package.json          # Dependencies: hono, @hono/node-server
 ├── tsconfig.json         # TypeScript config (ESNext, strict)
+├── Dockerfile            # Multi-stage Docker build
+├── cloudbuild.yaml       # Cloud Build configuration
+├── .dockerignore
 └── dist/                 # Built JavaScript (after npm run build)
 ```
 
@@ -405,12 +408,12 @@ curl "http://localhost:3000/api/hello?name=Test"
 ### Manual Deploy (for testing)
 
 ```bash
-# Build Docker image
+# Build Docker image using Cloud Build
 gcloud builds submit \
   --account=paweljanus.gcp@gmail.com \
   --project=native-dev-506112 \
-  --tag europe-central2-docker.pkg.dev/native-dev-506112/gcp-apps/backend:latest \
-  workspaces/backend
+  --config=workspaces/backend/cloudbuild.yaml \
+  .
 
 # Deploy to Cloud Run
 gcloud run deploy backend \
@@ -425,6 +428,19 @@ gcloud run deploy backend \
   --cpu=1 \
   --min-instances=0 \
   --max-instances=10
+
+# Get Service URL
+gcloud run services describe backend \
+  --account=paweljanus.gcp@gmail.com \
+  --project=native-dev-506112 \
+  --region=europe-central2 \
+  --format='value(status.url)'
+```
+
+**Test deployed service:**
+```bash
+curl https://backend-216135873902.europe-central2.run.app/health
+curl "https://backend-216135873902.europe-central2.run.app/api/hello?name=Test"
 ```
 
 ### Automated Deploy (GitHub Actions)
