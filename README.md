@@ -226,7 +226,18 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --account=$ACCOUNT \
   --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/cloudbuild.builds.editor"
+
+# Service Usage Consumer — use enabled GCP APIs
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/serviceusage.serviceUsageConsumer"
 ```
+
+**Why Service Usage Consumer?**
+- Grants `serviceusage.services.use` permission
+- Required for Cloud Build to use enabled APIs in the project
+- Read-only permissions for quota checking (`quotas.get`, `operations.get`)
 
 #### Future Phases (add when needed):
 
