@@ -268,12 +268,17 @@ gcloud projects get-iam-policy $PROJECT_ID \
 Cloud Build needs to upload source code to a Cloud Storage bucket. Grant the Service Account permissions **only to the Cloud Build bucket** (not all buckets in the project).
 
 ```bash
-# Grant access only to Cloud Build bucket (least privilege principle)
+# Grant bucket access (Cloud Build needs both bucket and object permissions)
 gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
   --account=$ACCOUNT \
   --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --role="roles/storage.objectAdmin"
+  --role="roles/storage.legacyBucketWriter"
 ```
+
+**Why `legacyBucketWriter`?**
+- Grants full access to the bucket AND objects within it
+- Cloud Build needs `storage.buckets.get` (check if bucket exists) + `storage.objects.*` (upload source)
+- `storage.objectAdmin` alone is insufficient (only objects, not bucket itself)
 
 **Why bucket-specific?**
 - Service Account only needs access to the Cloud Build staging bucket
