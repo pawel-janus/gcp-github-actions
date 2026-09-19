@@ -61,6 +61,8 @@ Workflow:
 3. WIF authentication (github-actions-sa)
 4. `firebase deploy --only hosting` — push dist/ to Firebase Hosting CDN
 
+**Note:** Deploys only when `workspaces/frontend/**` changes or global files (package.json, package-lock.json, .github/workflows/**) are modified. See [Workflow docs](../../.github/workflows/) for path filtering details.
+
 ### Manual Deploy
 
 ```bash

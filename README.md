@@ -66,9 +66,11 @@ This configures:
 See workspace README files for local development and manual deployment:
 - [Backend (Phase 1)](workspaces/backend/) — Hono API on Cloud Run ✅
 - [Frontend (Phase 2)](workspaces/frontend/) — React Weather App on Firebase Hosting ✅
-- Functions (Phase 3) — Coming soon
-- Worker (Phase 4) — Coming soon
-- Cron (Phase 5) — Coming soon
+- Functions (Phase 4) — Coming soon
+- Worker (Phase 5) — Coming soon
+- Cron (Phase 6) — Coming soon
+
+**Note:** Phase 3 was workflow refactor (smart deployment) — see [Workflow docs](.github/workflows/)
 
 ### 3. Deploy
 

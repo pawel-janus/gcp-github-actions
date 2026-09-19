@@ -136,6 +136,8 @@ curl "${SERVICE_URL}/api/hello?name=Test"
 5. Backend is built and deployed
 6. Deployment URL available in workflow logs
 
+**Note:** Deploys only when `workspaces/backend/**` changes or global files (package.json, package-lock.json, .github/workflows/**) are modified. See [Workflow docs](../../.github/workflows/) for path filtering details.
+
 ---
 
 ## Architecture
