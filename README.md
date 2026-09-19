@@ -162,3 +162,4 @@ Built by [Paweł Janus](https://github.com/pawel-janus) as part of GCP learning 
 **Certifications:**
 - Google Cloud Associate Cloud Engineer
 - Google Cloud Associate Data Practitioner
+
