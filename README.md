@@ -265,31 +265,40 @@ gcloud projects get-iam-policy $PROJECT_ID \
 
 ### Step 6: Grant Cloud Build Bucket Permissions
 
-Cloud Build needs to upload source code to a Cloud Storage bucket. Grant the Service Account permissions **only to the Cloud Build bucket** (not all buckets in the project).
+Cloud Build needs to upload source code to a Cloud Storage bucket. Grant permissions **only to the Cloud Build bucket** for both the GitHub Actions SA and the default Cloud Build SA.
 
 ```bash
-# Grant bucket access (Cloud Build needs both bucket and object permissions)
+# Grant bucket access to GitHub Actions SA
 gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
   --account=$ACCOUNT \
   --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/storage.legacyBucketWriter"
+
+# Grant bucket access to default Cloud Build SA (executes the build)
+gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
+  --account=$ACCOUNT \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/storage.admin"
 ```
 
-**Why `legacyBucketWriter`?**
-- Grants full access to the bucket AND objects within it
-- Cloud Build needs `storage.buckets.get` (check if bucket exists) + `storage.objects.*` (upload source)
-- `storage.objectAdmin` alone is insufficient (only objects, not bucket itself)
+**Why two Service Accounts?**
+- `github-actions-sa` → triggers the build via WIF (needs `cloudbuild.builds.editor`)
+- `{PROJECT_NUMBER}@cloudbuild.gserviceaccount.com` → **executes** the build (uploads source, builds image)
+- Both need bucket access, but only to this one bucket
+
+**Why `storage.admin` for Cloud Build SA?**
+- Cloud Build needs full control over source uploads and staging
+- Bucket-specific (not project-wide), so still follows least privilege
 
 **Why bucket-specific?**
-- Service Account only needs access to the Cloud Build staging bucket
+- Service Accounts only need access to the Cloud Build staging bucket
 - **NOT** to other buckets in the project (user data, logs, backups)
 - Follows the principle of least privilege
 
 **Verify:**
 ```bash
 gcloud storage buckets get-iam-policy gs://${PROJECT_ID}_cloudbuild \
-  --account=$ACCOUNT \
-  --filter="bindings.members:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+  --account=$ACCOUNT
 ```
 
 ### Step 7: Bind GitHub Repo → Service Account
@@ -499,6 +508,7 @@ curl "http://localhost:3000/api/hello?name=Test"
 gcloud builds submit \
   --account=$ACCOUNT \
   --project=$PROJECT_ID \
+  --gcs-source-staging-dir=gs://${PROJECT_ID}_cloudbuild/source \
   --config=workspaces/backend/cloudbuild.yaml \
   .
 
