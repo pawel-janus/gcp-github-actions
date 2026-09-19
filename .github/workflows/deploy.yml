@@ -52,6 +52,7 @@ jobs:
           gcloud run deploy backend \
             --project=${{ env.PROJECT_ID }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/backend:latest \
+            --service-account=${{ vars.GCP_CLOUD_RUN_SA }} \
             --platform=managed \
             --region=${{ env.REGION }} \
             --allow-unauthenticated \

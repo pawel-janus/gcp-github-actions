@@ -87,12 +87,16 @@ Configure these variables in your GitHub repository before running the workflow:
 | Variable Name | Description | Example Value |
 |---------------|-------------|---------------|
 | `GCP_PROJECT_ID` | Your GCP Project ID | `my-project-123` |
+| `GCP_PROJECT_NUMBER` | Your GCP Project Number | `123456789012` |
 | `GCP_REGION` | Deployment region | `europe-central2` |
 | `GCP_AR_REPO` | Artifact Registry repository name | `gcp-apps` |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF Provider (from Step 7 below) | `projects/123.../providers/github-provider` |
-| `GCP_SERVICE_ACCOUNT` | Service Account email | `github-actions-sa@PROJECT_ID.iam.gserviceaccount.com` |
+| `GCP_CLOUD_RUN_SA` | Cloud Run runtime Service Account | `123456789012-compute@developer.gserviceaccount.com` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF Provider (from Step 8 below) | `projects/123.../providers/github-provider` |
+| `GCP_SERVICE_ACCOUNT` | GitHub Actions Service Account email | `github-actions-sa@PROJECT_ID.iam.gserviceaccount.com` |
 
-You'll get the `GCP_WORKLOAD_IDENTITY_PROVIDER` value after completing Step 7 of the WIF setup.
+**Important notes:**
+- `GCP_WORKLOAD_IDENTITY_PROVIDER` value comes from Step 8 of the WIF setup
+- **`GCP_CLOUD_RUN_SA` should be a dedicated Service Account in production** (e.g., `backend-sa@PROJECT_ID.iam.gserviceaccount.com`), not the default compute SA. For this POC, we use the default compute SA (`PROJECT_NUMBER-compute@developer.gserviceaccount.com`) for simplicity. If using a dedicated SA, create it and grant necessary permissions (least privilege).
 
 ---
 
@@ -215,9 +219,10 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/run.admin"
 
-# Service Account User — deploy as another SA
-gcloud projects add-iam-policy-binding $PROJECT_ID \
+# Service Account User — allow impersonation of compute SA (SA-specific, not project-wide)
+gcloud iam service-accounts add-iam-policy-binding ${PROJECT_NUMBER}-compute@developer.gserviceaccount.com \
   --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/iam.serviceAccountUser"
 
@@ -244,6 +249,11 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 - Grants `serviceusage.services.use` permission
 - Required for Cloud Build to use enabled APIs in the project
 - Read-only permissions for quota checking (`quotas.get`, `operations.get`)
+
+**Why Service Account User on specific SA (not project-level)?**
+- SA-specific binding allows `github-actions-sa` to impersonate **only** the compute SA
+- Project-level would allow impersonating **all** SAs in the project (security risk)
+- Follows least privilege principle
 
 **Why Logging Viewer?**
 - Allows reading Cloud Build logs (optional but helpful for debugging)
@@ -532,10 +542,13 @@ gcloud builds submit \
   .
 
 # Deploy to Cloud Run
+# Note: Use dedicated SA in production (e.g., backend-sa@PROJECT_ID.iam.gserviceaccount.com)
+# For this POC, we use the default compute SA
 gcloud run deploy backend \
   --account=$ACCOUNT \
   --project=$PROJECT_ID \
   --image=${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/backend:latest \
+  --service-account=${PROJECT_NUMBER}-compute@developer.gserviceaccount.com \
   --platform=managed \
   --region=$REGION \
   --allow-unauthenticated \
