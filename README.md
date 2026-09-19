@@ -78,29 +78,9 @@ export AR_REPO=your-artifact-registry-repo
 
 ---
 
-## Setup: GitHub Repository Variables
-
-Configure these variables in your GitHub repository before running the workflow:
-
-**Settings → Secrets and variables → Actions → Variables → New repository variable**
-
-| Variable Name | Description | Example Value |
-|---------------|-------------|---------------|
-| `GCP_PROJECT_ID` | Your GCP Project ID | `my-project-123` |
-| `GCP_PROJECT_NUMBER` | Your GCP Project Number | `123456789012` |
-| `GCP_REGION` | Deployment region | `europe-central2` |
-| `GCP_AR_REPO` | Artifact Registry repository name | `gcp-apps` |
-| `GCP_CLOUD_RUN_SA` | Cloud Run runtime Service Account | `123456789012-compute@developer.gserviceaccount.com` |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF Provider (from Step 8 below) | `projects/123.../providers/github-provider` |
-| `GCP_SERVICE_ACCOUNT` | GitHub Actions Service Account email | `github-actions-sa@PROJECT_ID.iam.gserviceaccount.com` |
-
-**Important notes:**
-- `GCP_WORKLOAD_IDENTITY_PROVIDER` value comes from Step 8 of the WIF setup
-- **`GCP_CLOUD_RUN_SA` should be a dedicated Service Account in production** (e.g., `backend-sa@PROJECT_ID.iam.gserviceaccount.com`), not the default compute SA. For this POC, we use the default compute SA (`PROJECT_NUMBER-compute@developer.gserviceaccount.com`) for simplicity. If using a dedicated SA, create it and grant necessary permissions (least privilege).
-
----
-
 ## Setup: Workload Identity Federation
+
+⚠️ **Complete Steps 1-8 below first, then configure GitHub Repository Variables (Step 10)**
 
 ### Prerequisites
 
@@ -144,7 +124,7 @@ gcloud iam workload-identity-pools create github-actions-pool \
   --display-name="GitHub Actions Pool"
 ```
 
-**Verify:**
+**Verify:** (should show `state: ACTIVE`)
 ```bash
 gcloud iam workload-identity-pools describe github-actions-pool \
   --account=$ACCOUNT \
@@ -171,7 +151,7 @@ gcloud iam workload-identity-pools providers create-oidc github-provider \
 - Maps JWT claims to GCP attributes
 - **Security:** Only tokens from `$GITHUB_OWNER/*` repos are accepted
 
-**Verify:**
+**Verify:** (should show `state: ACTIVE` and your attribute-condition)
 ```bash
 gcloud iam workload-identity-pools providers describe github-provider \
   --account=$ACCOUNT \
@@ -195,7 +175,7 @@ gcloud iam service-accounts create github-actions-sa \
 echo "github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
-**Verify:**
+**Verify:** (should show email and displayName)
 ```bash
 gcloud iam service-accounts describe github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com \
   --account=$ACCOUNT \
@@ -256,8 +236,10 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 - Follows least privilege principle
 
 **Why Logging Viewer?**
-- Allows reading Cloud Build logs (optional but helpful for debugging)
-- Without this, workflow can't stream build logs in real-time
+- **Optional** - Cloud Build works without this role
+- Allows streaming build logs in real-time during GitHub Actions workflow
+- Without it, workflow shows "can't stream logs" warning, but build still succeeds
+- Helpful for debugging - you can see build output live instead of checking Cloud Console
 
 #### Future Phases (add when needed):
 
@@ -275,7 +257,7 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --role="roles/firebase.admin"
 ```
 
-**Verify all roles:**
+**Verify all roles:** (should list 5 roles: artifactregistry.writer, run.admin, cloudbuild.builds.editor, serviceusage.serviceUsageConsumer, logging.viewer)
 ```bash
 gcloud projects get-iam-policy $PROJECT_ID \
   --account=$ACCOUNT \
@@ -283,11 +265,18 @@ gcloud projects get-iam-policy $PROJECT_ID \
   --filter="bindings.members:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
+⚠️ **IAM Propagation Delay:** Wait 2-3 minutes after adding permissions before proceeding. IAM changes need time to propagate across Google's infrastructure.
+
 ### Step 6: Grant Cloud Build Bucket Permissions
 
 Cloud Build needs to upload source code to a Cloud Storage bucket. Grant permissions **only to the Cloud Build bucket** for both the GitHub Actions SA and the default Cloud Build SA.
 
+**Note:** The `gs://{PROJECT_ID}_cloudbuild` bucket is automatically created by Cloud Build on first use. If the bucket doesn't exist yet, these commands will fail - run your first `gcloud builds submit` (Step "Manual Deploy") to create it, then come back to add permissions.
+
 ```bash
+# Ensure PROJECT_NUMBER is set (needed for Cloud Build SA email)
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+
 # Grant bucket viewer access to GitHub Actions SA (read-only metadata)
 gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
   --account=$ACCOUNT \
@@ -307,10 +296,20 @@ gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
   --role="roles/storage.admin"
 ```
 
-**Why two Service Accounts?**
-- `github-actions-sa` → triggers the build via WIF (needs `cloudbuild.builds.editor`)
-- `{PROJECT_NUMBER}@cloudbuild.gserviceaccount.com` → **executes** the build (uploads source, builds image)
-- Both need bucket access, but only to this one bucket
+**How Cloud Build uses two Service Accounts:**
+```
+YOU (via github-actions-sa)
+  ↓ triggers
+gcloud builds submit
+  ↓ spawns
+Cloud Build (runs as PROJECT_NUMBER@cloudbuild.gserviceaccount.com)
+  ↓ uploads source, builds image
+gs://PROJECT_ID_cloudbuild bucket
+```
+
+Both Service Accounts need bucket access:
+- `github-actions-sa` → read bucket metadata + manage log objects (WIF authentication)
+- `{PROJECT_NUMBER}@cloudbuild.gserviceaccount.com` → full control (executes the actual build)
 
 **Why these specific roles?**
 - `storage.bucketViewer` (github-actions-sa) → read bucket metadata (lightweight, read-only)
@@ -323,11 +322,13 @@ gcloud storage buckets add-iam-policy-binding gs://${PROJECT_ID}_cloudbuild \
 - **NOT** to other buckets in the project (user data, logs, backups)
 - Follows the principle of least privilege
 
-**Verify:**
+**Verify:** (should show both SAs with their roles: github-actions-sa with bucketViewer+objectAdmin, Cloud Build SA with storage.admin)
 ```bash
 gcloud storage buckets get-iam-policy gs://${PROJECT_ID}_cloudbuild \
   --account=$ACCOUNT
 ```
+
+⚠️ **IAM Propagation Delay:** Wait 2-3 minutes before testing the workflow.
 
 ### Step 7: Bind GitHub Repo → Service Account
 
@@ -343,7 +344,7 @@ gcloud iam service-accounts add-iam-policy-binding github-actions-sa@${PROJECT_I
 - Allows WIF Pool to impersonate this Service Account
 - **Only** for repo `$GITHUB_OWNER/$GITHUB_REPO` (security)
 
-**Verify:**
+**Verify:** (should show workloadIdentityUser binding with principalSet for your GitHub repo)
 ```bash
 gcloud iam service-accounts get-iam-policy github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com \
   --account=$ACCOUNT \
@@ -390,6 +391,24 @@ gcloud artifacts repositories create $AR_REPO \
 ```
 ${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE_NAME}:latest
 ```
+
+### Step 10: Configure GitHub Repository Variables
+
+Now that WIF setup is complete, configure these variables in your GitHub repository:
+
+**Settings → Secrets and variables → Actions → Variables → New repository variable**
+
+| Variable Name | Description | Example Value |
+|---------------|-------------|---------------|
+| `GCP_PROJECT_ID` | Your GCP Project ID | `my-project-123` |
+| `GCP_REGION` | Deployment region | `europe-central2` |
+| `GCP_AR_REPO` | Artifact Registry repository name | `gcp-apps` |
+| `GCP_CLOUD_RUN_SA` | Cloud Run runtime Service Account | `123456789012-compute@developer.gserviceaccount.com` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF Provider name (from Step 8 above) | `projects/123.../providers/github-provider` |
+| `GCP_SERVICE_ACCOUNT` | GitHub Actions Service Account email | `github-actions-sa@PROJECT_ID.iam.gserviceaccount.com` |
+
+**Important notes:**
+- **`GCP_CLOUD_RUN_SA` should be a dedicated Service Account in production** (e.g., `backend-sa@PROJECT_ID.iam.gserviceaccount.com`), not the default compute SA. For this POC, we use the default compute SA (`PROJECT_NUMBER-compute@developer.gserviceaccount.com`) for simplicity. If using a dedicated SA, create it and grant necessary permissions (least privilege).
 
 ---
 
