@@ -4,6 +4,7 @@ Monorepo demonstrating CI/CD with GitHub Actions and Workload Identity Federatio
 
 **Key features:**
 - Keyless authentication (no service account JSON keys stored anywhere)
+- Smart deployment with path filtering (deploy only changed workspaces)
 - Automated deployment pipeline (push to main → build → deploy)
 - Multi-service orchestration (Cloud Run, Cloud Functions, Firebase Hosting)
 - Production-ready security patterns (least privilege IAM, bucket-specific permissions)
@@ -37,11 +38,12 @@ This is an npm workspaces monorepo. Each workspace demonstrates a different GCP 
 |-----------|-------------|--------|------|
 | `backend` | Cloud Run (public) | ✅ Phase 1 | [→ README](workspaces/backend/) |
 | `frontend` | Firebase Hosting | ✅ Phase 2 | [→ README](workspaces/frontend/) |
-| `functions` | Cloud Functions 2nd gen | 📋 Phase 3 | Coming soon |
-| `worker` | Cloud Run (private) | 📋 Phase 4 | Coming soon |
-| `cron` | Cloud Scheduler | 📋 Phase 5 | Coming soon |
+| — | Smart deployment refactor | ✅ Phase 3 | [→ Workflow docs](.github/workflows/) |
+| `functions` | Cloud Functions 2nd gen | 📋 Phase 4 | Coming soon |
+| `worker` | Cloud Run (private) | 📋 Phase 5 | Coming soon |
+| `cron` | Cloud Scheduler | 📋 Phase 6 | Coming soon |
 
-**Implementation order:** Phase 1 → 2 → (smart workflow refactor) → 3 → 4 → 5
+**Implementation order:** Phase 1 (backend) → 2 (frontend) → 3 (smart deployment) → 4 (functions) → 5 (worker) → 6 (cron)
 
 Workspaces are independent examples — they don't need to be logically connected.
 
@@ -79,7 +81,8 @@ See workspace README files for local development and manual deployment:
 **Automated (GitHub Actions):**
 ```bash
 git push origin main
-# GitHub Actions workflow automatically builds and deploys changed workspaces
+# GitHub Actions workflow automatically detects changes and deploys only affected workspaces
+# See .github/workflows/README.md for deployment rules and path filtering details
 ```
 
 ---
@@ -103,7 +106,9 @@ gcp-github-actions/
 ├── SETUP.md               # WIF one-time setup (9 steps)
 ├── package.json           # Root — npm workspaces config
 ├── .github/workflows/
-│   └── deploy.yml         # GitHub Actions workflow (WIF auth + deploy)
+│   ├── README.md          # Workflow documentation (smart deployment)
+│   ├── deploy.yml         # Main orchestrator (path filtering + conditional deploy)
+│   └── _deploy-service.yml # Reusable workflow template
 └── workspaces/
     ├── backend/           # Phase 1: Hono API on Cloud Run
     │   ├── README.md      # Backend-specific docs
@@ -111,17 +116,19 @@ gcp-github-actions/
     │   ├── Dockerfile
     │   └── cloudbuild.yaml
     ├── frontend/          # Phase 2: React SPA on Firebase Hosting
-    ├── functions/         # Phase 3: Cloud Functions 2nd gen
-    ├── worker/            # Phase 4: Private Cloud Run
-    └── cron/              # Phase 5: Cloud Scheduler
+    ├── functions/         # Phase 4: Cloud Functions 2nd gen (planned)
+    ├── worker/            # Phase 5: Private Cloud Run (planned)
+    └── cron/              # Phase 6: Cloud Scheduler (planned)
 ```
 
 ---
 
 ## Skills Demonstrated
 
-- **GitHub Actions** — workflow syntax, triggers, jobs, OIDC authentication
+- **GitHub Actions** — workflow syntax, triggers, jobs, OIDC authentication, reusable workflows
 - **Workload Identity Federation** — pool/provider setup, keyless authentication
+- **Path filtering** — conditional deployment based on changed files (CI/CD optimization)
+- **Reusable workflows** — DRY principle for GitHub Actions
 - **Security patterns** — least privilege IAM, SA-specific permissions, bucket-specific access
 - **Cloud Build** — two Service Accounts pattern (trigger SA + execution SA)
 - **Artifact Registry** — Docker image management
@@ -136,9 +143,9 @@ gcp-github-actions/
 ## Documentation
 
 - **[SETUP.md](SETUP.md)** — Complete WIF setup (one-time)
+- **[.github/workflows/README.md](.github/workflows/)** — Smart deployment system (path filtering, reusable workflows)
 - **[workspaces/backend/README.md](workspaces/backend/)** — Backend workspace (Phase 1)
 - **[workspaces/frontend/README.md](workspaces/frontend/)** — Frontend workspace (Phase 2)
-- **[.github/workflows/deploy.yml](.github/workflows/deploy.yml)** — GitHub Actions workflow file
 
 ---
 

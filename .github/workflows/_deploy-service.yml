@@ -1,0 +1,109 @@
+name: Deploy Service (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: 'Service name (e.g., backend, frontend)'
+        required: true
+        type: string
+      service-type:
+        description: 'Service type: cloud-run, firebase-hosting, cloud-functions'
+        required: true
+        type: string
+      workspace:
+        description: 'Workspace path (e.g., workspaces/backend)'
+        required: true
+        type: string
+      region:
+        description: 'GCP region'
+        required: false
+        type: string
+        default: ${{ vars.GCP_REGION }}
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ inputs.region }}
+  AR_REPO: ${{ vars.GCP_AR_REPO }}
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.service-name }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify authentication
+        run: |
+          gcloud auth list
+          gcloud config get-value project
+
+      # Cloud Run deployment
+      - name: Build and deploy Cloud Run service
+        if: inputs.service-type == 'cloud-run'
+        run: |
+          gcloud builds submit \
+            --project=${{ env.PROJECT_ID }} \
+            --gcs-source-staging-dir=gs://${{ env.PROJECT_ID }}_cloudbuild/source \
+            --gcs-log-dir=gs://${{ env.PROJECT_ID }}_cloudbuild/logs \
+            --config=${{ inputs.workspace }}/cloudbuild.yaml \
+            .
+
+          gcloud run deploy ${{ inputs.service-name }} \
+            --project=${{ env.PROJECT_ID }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ inputs.service-name }}:latest \
+            --service-account=${{ vars.GCP_CLOUD_RUN_SA }} \
+            --platform=managed \
+            --region=${{ env.REGION }} \
+            --allow-unauthenticated \
+            --port=3000 \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=10
+
+          gcloud run services describe ${{ inputs.service-name }} \
+            --project=${{ env.PROJECT_ID }} \
+            --region=${{ env.REGION }} \
+            --format='value(status.url)'
+
+      # Firebase Hosting deployment
+      - name: Set up Node.js
+        if: inputs.service-type == 'firebase-hosting'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: inputs.service-type == 'firebase-hosting'
+        run: npm ci
+
+      - name: Build frontend
+        if: inputs.service-type == 'firebase-hosting'
+        run: npm run build:${{ inputs.service-name }}
+
+      - name: Deploy to Firebase Hosting
+        if: inputs.service-type == 'firebase-hosting'
+        run: |
+          cd ${{ inputs.workspace }}
+          npx firebase deploy \
+            --project=${{ env.PROJECT_ID }} \
+            --only hosting \
+            --non-interactive
