@@ -137,7 +137,7 @@ gcp-github-actions/
 
 - **[SETUP.md](SETUP.md)** — Complete WIF setup (one-time)
 - **[workspaces/backend/README.md](workspaces/backend/)** — Backend workspace (Phase 1)
-- **[.github/workflows/deploy.yml](.github/workflows/deploy.yml)** — GitHub Actions workflow
+- **[.github/workflows/deploy.yml](.github/workflows/deploy.yml)** — GitHub Actions workflow file
 
 ---
 
