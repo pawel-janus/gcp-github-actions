@@ -36,7 +36,7 @@ This is an npm workspaces monorepo. Each workspace demonstrates a different GCP 
 | Workspace | GCP Service | Status | Docs |
 |-----------|-------------|--------|------|
 | `backend` | Cloud Run (public) | ✅ Phase 1 | [→ README](workspaces/backend/) |
-| `frontend` | Firebase Hosting | 📋 Phase 2 | Coming soon |
+| `frontend` | Firebase Hosting | ✅ Phase 2 | [→ README](workspaces/frontend/) |
 | `functions` | Cloud Functions 2nd gen | 📋 Phase 3 | Coming soon |
 | `worker` | Cloud Run (private) | 📋 Phase 4 | Coming soon |
 | `cron` | Cloud Scheduler | 📋 Phase 5 | Coming soon |
@@ -63,7 +63,7 @@ This configures:
 
 See workspace README files for local development and manual deployment:
 - [Backend (Phase 1)](workspaces/backend/) — Hono API on Cloud Run ✅
-- Frontend (Phase 2) — Coming soon
+- [Frontend (Phase 2)](workspaces/frontend/) — React Weather App on Firebase Hosting ✅
 - Functions (Phase 3) — Coming soon
 - Worker (Phase 4) — Coming soon
 - Cron (Phase 5) — Coming soon
@@ -137,6 +137,7 @@ gcp-github-actions/
 
 - **[SETUP.md](SETUP.md)** — Complete WIF setup (one-time)
 - **[workspaces/backend/README.md](workspaces/backend/)** — Backend workspace (Phase 1)
+- **[workspaces/frontend/README.md](workspaces/frontend/)** — Frontend workspace (Phase 2)
 - **[.github/workflows/deploy.yml](.github/workflows/deploy.yml)** — GitHub Actions workflow file
 
 ---
