@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION }}
+  AR_REPO: ${{ vars.GCP_AR_REPO }}
+
 jobs:
   deploy-backend:
     name: Deploy Backend to Cloud Run
@@ -22,8 +27,8 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/216135873902/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
-          service_account: 'github-actions-sa@native-dev-506112.iam.gserviceaccount.com'
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -31,17 +36,17 @@ jobs:
       - name: Build Docker image
         run: |
           gcloud builds submit \
-            --project=native-dev-506112 \
+            --project=${{ env.PROJECT_ID }} \
             --config=workspaces/backend/cloudbuild.yaml \
             .
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy backend \
-            --project=native-dev-506112 \
-            --image=europe-central2-docker.pkg.dev/native-dev-506112/gcp-apps/backend:latest \
+            --project=${{ env.PROJECT_ID }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/backend:latest \
             --platform=managed \
-            --region=europe-central2 \
+            --region=${{ env.REGION }} \
             --allow-unauthenticated \
             --port=3000 \
             --memory=512Mi \
@@ -52,6 +57,6 @@ jobs:
       - name: Get Service URL
         run: |
           gcloud run services describe backend \
-            --project=native-dev-506112 \
-            --region=europe-central2 \
+            --project=${{ env.PROJECT_ID }} \
+            --region=${{ env.REGION }} \
             --format='value(status.url)'

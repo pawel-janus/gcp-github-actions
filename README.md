@@ -58,13 +58,41 @@ Each workspace demonstrates a different GCP deployment pattern. Workspaces don't
 
 ## GCP Configuration
 
-| Parameter | Value |
-|-----------|-------|
-| **Project ID** | `native-dev-506112` |
-| **Project Number** | `216135873902` |
-| **Region** | `europe-central2` |
-| **Account** | `paweljanus.gcp@gmail.com` |
-| **Artifact Registry** | `gcp-apps` (europe-central2) |
+Before starting, configure these values for your GCP project:
+
+| Parameter | How to get it |
+|-----------|---------------|
+| **Project ID** | Your GCP project ID (e.g., `my-project-123`) |
+| **Project Number** | Run: `gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'` |
+| **Region** | Choose deployment region (e.g., `europe-central2`, `us-central1`) |
+| **Account** | Your GCP account email |
+| **Artifact Registry** | Repository name for Docker images (e.g., `gcp-apps`) |
+
+**Set environment variables:**
+```bash
+export PROJECT_ID=your-gcp-project-id
+export REGION=your-region
+export ACCOUNT=your-email@example.com
+export AR_REPO=your-artifact-registry-repo
+```
+
+---
+
+## Setup: GitHub Repository Variables
+
+Configure these variables in your GitHub repository before running the workflow:
+
+**Settings → Secrets and variables → Actions → Variables → New repository variable**
+
+| Variable Name | Description | Example Value |
+|---------------|-------------|---------------|
+| `GCP_PROJECT_ID` | Your GCP Project ID | `my-project-123` |
+| `GCP_REGION` | Deployment region | `europe-central2` |
+| `GCP_AR_REPO` | Artifact Registry repository name | `gcp-apps` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF Provider (from Step 7 below) | `projects/123.../providers/github-provider` |
+| `GCP_SERVICE_ACCOUNT` | Service Account email | `github-actions-sa@PROJECT_ID.iam.gserviceaccount.com` |
+
+You'll get the `GCP_WORKLOAD_IDENTITY_PROVIDER` value after completing Step 7 of the WIF setup.
 
 ---
 
@@ -72,9 +100,23 @@ Each workspace demonstrates a different GCP deployment pattern. Workspaces don't
 
 ### Prerequisites
 
-- GCP project: `native-dev-506112`
-- GitHub repo: `pawel-janus/gcp-github-actions`
-- `gcloud` CLI authenticated as `paweljanus.gcp@gmail.com`
+- GCP project (get Project ID: `gcloud config get-value project`)
+- GitHub repo created (e.g., `your-username/gcp-github-actions`)
+- `gcloud` CLI authenticated (`gcloud auth login`)
+
+### Setup Environment Variables
+
+Set these variables before running setup commands:
+
+```bash
+export PROJECT_ID=$(gcloud config get-value project)
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+export ACCOUNT=$(gcloud config get-value account)
+export GITHUB_OWNER=your-github-username
+export GITHUB_REPO=gcp-github-actions
+export REGION=europe-central2
+export AR_REPO=gcp-apps
+```
 
 ### Step 1: Enable Required APIs
 
@@ -84,16 +126,16 @@ gcloud services enable iamcredentials.googleapis.com \
   artifactregistry.googleapis.com \
   run.googleapis.com \
   cloudbuild.googleapis.com \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID
 ```
 
 ### Step 2: Create Workload Identity Pool
 
 ```bash
 gcloud iam workload-identity-pools create github-actions-pool \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --location=global \
   --display-name="GitHub Actions Pool"
 ```
@@ -101,8 +143,8 @@ gcloud iam workload-identity-pools create github-actions-pool \
 **Verify:**
 ```bash
 gcloud iam workload-identity-pools describe github-actions-pool \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --location=global
 ```
 
@@ -110,26 +152,26 @@ gcloud iam workload-identity-pools describe github-actions-pool \
 
 ```bash
 gcloud iam workload-identity-pools providers create-oidc github-provider \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --location=global \
   --workload-identity-pool=github-actions-pool \
   --display-name="GitHub OIDC Provider" \
   --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
-  --attribute-condition="assertion.repository_owner == 'pawel-janus'" \
+  --attribute-condition="assertion.repository_owner == '$GITHUB_OWNER'" \
   --issuer-uri="https://token.actions.githubusercontent.com"
 ```
 
 **What this does:**
 - Sets GitHub as trusted OIDC issuer (`token.actions.githubusercontent.com`)
 - Maps JWT claims to GCP attributes
-- **Security:** Only tokens from `pawel-janus/*` repos are accepted
+- **Security:** Only tokens from `$GITHUB_OWNER/*` repos are accepted
 
 **Verify:**
 ```bash
 gcloud iam workload-identity-pools providers describe github-provider \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --location=global \
   --workload-identity-pool=github-actions-pool
 ```
@@ -138,19 +180,22 @@ gcloud iam workload-identity-pools providers describe github-provider \
 
 ```bash
 gcloud iam service-accounts create github-actions-sa \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --display-name="GitHub Actions Service Account" \
   --description="Service account for GitHub Actions CI/CD deployments"
 ```
 
-**Email:** `github-actions-sa@native-dev-506112.iam.gserviceaccount.com`
+**Service Account Email:**
+```bash
+echo "github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+```
 
 **Verify:**
 ```bash
-gcloud iam service-accounts describe github-actions-sa@native-dev-506112.iam.gserviceaccount.com \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112
+gcloud iam service-accounts describe github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID
 ```
 
 ### Step 5: Grant IAM Roles to Service Account
@@ -159,27 +204,27 @@ gcloud iam service-accounts describe github-actions-sa@native-dev-506112.iam.gse
 
 ```bash
 # Artifact Registry Writer — push Docker images
-gcloud projects add-iam-policy-binding native-dev-506112 \
-  --account=paweljanus.gcp@gmail.com \
-  --member="serviceAccount:github-actions-sa@native-dev-506112.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/artifactregistry.writer"
 
 # Cloud Run Admin — deploy services
-gcloud projects add-iam-policy-binding native-dev-506112 \
-  --account=paweljanus.gcp@gmail.com \
-  --member="serviceAccount:github-actions-sa@native-dev-506112.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/run.admin"
 
 # Service Account User — deploy as another SA
-gcloud projects add-iam-policy-binding native-dev-506112 \
-  --account=paweljanus.gcp@gmail.com \
-  --member="serviceAccount:github-actions-sa@native-dev-506112.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/iam.serviceAccountUser"
 
 # Cloud Build Service Account — submit builds
-gcloud projects add-iam-policy-binding native-dev-506112 \
-  --account=paweljanus.gcp@gmail.com \
-  --member="serviceAccount:github-actions-sa@native-dev-506112.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/cloudbuild.builds.editor"
 ```
 
@@ -187,53 +232,53 @@ gcloud projects add-iam-policy-binding native-dev-506112 \
 
 ```bash
 # Phase 3: Cloud Functions
-gcloud projects add-iam-policy-binding native-dev-506112 \
-  --account=paweljanus.gcp@gmail.com \
-  --member="serviceAccount:github-actions-sa@native-dev-506112.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/cloudfunctions.admin"
 
 # Phase 2: Firebase Hosting
-gcloud projects add-iam-policy-binding native-dev-506112 \
-  --account=paweljanus.gcp@gmail.com \
-  --member="serviceAccount:github-actions-sa@native-dev-506112.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/firebase.admin"
 ```
 
 **Verify all roles:**
 ```bash
-gcloud projects get-iam-policy native-dev-506112 \
-  --account=paweljanus.gcp@gmail.com \
+gcloud projects get-iam-policy $PROJECT_ID \
+  --account=$ACCOUNT \
   --flatten="bindings[].members" \
-  --filter="bindings.members:github-actions-sa@native-dev-506112.iam.gserviceaccount.com"
+  --filter="bindings.members:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
 ### Step 6: Bind GitHub Repo → Service Account
 
 ```bash
-gcloud iam service-accounts add-iam-policy-binding github-actions-sa@native-dev-506112.iam.gserviceaccount.com \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+gcloud iam service-accounts add-iam-policy-binding github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/216135873902/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/pawel-janus/gcp-github-actions"
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/${GITHUB_OWNER}/${GITHUB_REPO}"
 ```
 
 **What this does:**
 - Allows WIF Pool to impersonate this Service Account
-- **Only** for repo `pawel-janus/gcp-github-actions` (security)
+- **Only** for repo `$GITHUB_OWNER/$GITHUB_REPO` (security)
 
 **Verify:**
 ```bash
-gcloud iam service-accounts get-iam-policy github-actions-sa@native-dev-506112.iam.gserviceaccount.com \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112
+gcloud iam service-accounts get-iam-policy github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID
 ```
 
 ### Step 7: Get Workload Identity Provider Name
 
 ```bash
 gcloud iam workload-identity-pools providers describe github-provider \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --location=global \
   --workload-identity-pool=github-actions-pool \
   --format="value(name)"
@@ -241,30 +286,32 @@ gcloud iam workload-identity-pools providers describe github-provider \
 
 **Output (used in GitHub Actions workflow):**
 ```
-projects/216135873902/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
+projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
 ```
+
+Save this value - you'll need it for `.github/workflows/deploy.yml`.
 
 ### Step 8: Create Artifact Registry Repository
 
 ```bash
 # Check if exists
-gcloud artifacts repositories describe gcp-apps \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
-  --location=europe-central2
+gcloud artifacts repositories describe $AR_REPO \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
+  --location=$REGION
 
 # If not exists, create
-gcloud artifacts repositories create gcp-apps \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+gcloud artifacts repositories create $AR_REPO \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --repository-format=docker \
-  --location=europe-central2 \
-  --description="Docker images for GCP POCs (GitHub Actions, Pub/Sub, Terraform, BigQuery)"
+  --location=$REGION \
+  --description="Docker images for GCP POCs"
 ```
 
-**Image path:**
+**Image path template:**
 ```
-europe-central2-docker.pkg.dev/native-dev-506112/gcp-apps/${SERVICE_NAME}:latest
+${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE_NAME}:latest
 ```
 
 ---
@@ -410,18 +457,18 @@ curl "http://localhost:3000/api/hello?name=Test"
 ```bash
 # Build Docker image using Cloud Build
 gcloud builds submit \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
   --config=workspaces/backend/cloudbuild.yaml \
   .
 
 # Deploy to Cloud Run
 gcloud run deploy backend \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
-  --image=europe-central2-docker.pkg.dev/native-dev-506112/gcp-apps/backend:latest \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
+  --image=${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/backend:latest \
   --platform=managed \
-  --region=europe-central2 \
+  --region=$REGION \
   --allow-unauthenticated \
   --port=3000 \
   --memory=512Mi \
@@ -430,17 +477,20 @@ gcloud run deploy backend \
   --max-instances=10
 
 # Get Service URL
-gcloud run services describe backend \
-  --account=paweljanus.gcp@gmail.com \
-  --project=native-dev-506112 \
-  --region=europe-central2 \
-  --format='value(status.url)'
+SERVICE_URL=$(gcloud run services describe backend \
+  --account=$ACCOUNT \
+  --project=$PROJECT_ID \
+  --region=$REGION \
+  --format='value(status.url)')
+
+echo "Service URL: $SERVICE_URL"
 ```
 
 **Test deployed service:**
 ```bash
-curl https://backend-216135873902.europe-central2.run.app/health
-curl "https://backend-216135873902.europe-central2.run.app/api/hello?name=Test"
+# Use the SERVICE_URL from previous step
+curl ${SERVICE_URL}/health
+curl "${SERVICE_URL}/api/hello?name=Test"
 ```
 
 ### Automated Deploy (GitHub Actions)
