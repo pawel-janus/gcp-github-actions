@@ -33,7 +33,7 @@ docker build → Artifact Registry → gcloud run deploy
 
 | Workspace | GCP Service | Status | Description |
 |-----------|-------------|--------|-------------|
-| `backend` | Cloud Run | 🚧 Phase 1 | Hono API (Hello World, health check) |
+| `backend` | Cloud Run | ✅ Phase 1 | Hono API (Hello World, health check) |
 | `frontend` | Firebase Hosting | 📋 Phase 2 | React SPA (static site) |
 | `functions` | Cloud Functions 2nd gen | 📋 Phase 3 | HTTP trigger (webhook handler) |
 | `worker` | Cloud Run (private) | 📋 Phase 4 | Background job processor |
@@ -337,6 +337,31 @@ gcp-github-actions/
 
 ---
 
+## Workspace: Backend (Phase 1)
+
+**Status:** ✅ Implemented  
+**Service:** Cloud Run  
+**Tech:** Hono + TypeScript + @hono/node-server
+
+### Endpoints
+
+- `GET /` — Service info and available endpoints
+- `GET /health` — Health check (status, timestamp)
+- `GET /api/hello?name=X` — Hello World with optional name parameter
+
+### Local Structure
+
+```
+workspaces/backend/
+├── src/
+│   └── index.ts          # Hono app with 3 endpoints
+├── package.json          # Dependencies: hono, @hono/node-server
+├── tsconfig.json         # TypeScript config (ESNext, strict)
+└── dist/                 # Built JavaScript (after npm run build)
+```
+
+---
+
 ## Development
 
 ### Install dependencies
@@ -355,6 +380,15 @@ npm run dev:backend
 
 ```bash
 npm run build:backend
+```
+
+### Test backend locally
+
+```bash
+npm run start:backend
+# In another terminal:
+curl http://localhost:3000/health
+curl "http://localhost:3000/api/hello?name=Test"
 ```
 
 ### Add new workspace
