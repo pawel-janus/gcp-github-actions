@@ -232,12 +232,22 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --account=$ACCOUNT \
   --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/serviceusage.serviceUsageConsumer"
+
+# Logging Viewer — read Cloud Build logs
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --account=$ACCOUNT \
+  --member="serviceAccount:github-actions-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/logging.viewer"
 ```
 
 **Why Service Usage Consumer?**
 - Grants `serviceusage.services.use` permission
 - Required for Cloud Build to use enabled APIs in the project
 - Read-only permissions for quota checking (`quotas.get`, `operations.get`)
+
+**Why Logging Viewer?**
+- Allows reading Cloud Build logs (optional but helpful for debugging)
+- Without this, workflow can't stream build logs in real-time
 
 #### Future Phases (add when needed):
 
@@ -509,6 +519,7 @@ gcloud builds submit \
   --account=$ACCOUNT \
   --project=$PROJECT_ID \
   --gcs-source-staging-dir=gs://${PROJECT_ID}_cloudbuild/source \
+  --gcs-log-dir=gs://${PROJECT_ID}_cloudbuild/logs \
   --config=workspaces/backend/cloudbuild.yaml \
   .
 

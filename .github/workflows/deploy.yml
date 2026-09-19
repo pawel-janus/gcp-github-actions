@@ -43,6 +43,7 @@ jobs:
           gcloud builds submit \
             --project=${{ env.PROJECT_ID }} \
             --gcs-source-staging-dir=gs://${{ env.PROJECT_ID }}_cloudbuild/source \
+            --gcs-log-dir=gs://${{ env.PROJECT_ID }}_cloudbuild/logs \
             --config=workspaces/backend/cloudbuild.yaml \
             .
 
