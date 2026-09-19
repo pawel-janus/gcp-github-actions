@@ -41,3 +41,4 @@ serve({
   fetch: app.fetch,
   port,
 });
+// Test: backend-only change for smart deployment validation
